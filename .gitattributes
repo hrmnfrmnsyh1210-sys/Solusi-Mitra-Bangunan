@@ -1,0 +1,3 @@
+# Pastikan shell script selalu pakai LF agar bisa dijalankan di server Linux
+*.sh text eol=lf
+deploy.sh text eol=lf
