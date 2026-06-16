@@ -14,7 +14,9 @@ Options -Indexes
 	# If you installed CodeIgniter in a subfolder, you will need to
 	# change the following line to match the subfolder you need.
 	# http://httpd.apache.org/docs/current/mod/mod_rewrite.html#rewritebase
-	RewriteBase /
+	# Project berada di public_html dan request diarahkan ke /public/ oleh
+	# .htaccess root, sehingga base URL-path untuk folder ini adalah /public/.
+	RewriteBase /public/
 
 	# Redirect Trailing Slashes...
 	RewriteCond %{REQUEST_FILENAME} !-d

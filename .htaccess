@@ -1,0 +1,23 @@
+# ============================================================================
+# .htaccess ROOT (untuk deploy di mana project berada langsung di public_html)
+#
+# CodeIgniter 4 entry-point-nya ada di folder public/. File ini mengarahkan
+# SEMUA request ke folder public/, sehingga file di luar public/
+# (app/, vendor/, writable/, .env, composer.json, dll) TIDAK terlayani publik.
+#
+# Jika Anda memakai metode symlink (public_html -> app/public), file ini
+# tidak dipakai (tidak berada di document root) dan aman dibiarkan.
+# ============================================================================
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Blokir akses ke dotfiles (.env, .git, dll), kecuali .well-known (ACME/SSL)
+    RewriteRule (^|/)\.(?!well-known)([^/]+) - [F]
+
+    # Arahkan semua request ke folder public/
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

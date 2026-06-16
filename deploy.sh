@@ -43,15 +43,29 @@ else
     fi
 fi
 
-# --- 2. Symlink public_html -> app/public ---------------------------------
+# --- 2. Routing web ke folder public/ -------------------------------------
 echo ""
-echo "==> [2/6] Arahkan public_html ke folder public"
-if [ -L "$PUBLIC_HTML" ]; then
-    echo "    Symlink sudah ada: $PUBLIC_HTML"
+echo "==> [2/6] Routing web ke folder public/"
+if [ "$(basename "$APP_DIR")" = "public_html" ]; then
+    # Layout: project berada LANGSUNG di public_html (mis. clone via hPanel Git).
+    # Routing ditangani .htaccess root yang sudah ada di repo. Tidak perlu symlink.
+    echo "    Project berada langsung di public_html."
+    if [ -f "$APP_DIR/.htaccess" ]; then
+        echo "    Routing -> public/ ditangani oleh .htaccess root. OK."
+    else
+        echo "    PERINGATAN: .htaccess root tidak ada. Jalankan 'git pull' dulu!" >&2
+    fi
 else
-    rm -rf "$PUBLIC_HTML"
-    ln -s "$APP_DIR/public" "$PUBLIC_HTML"
-    echo "    Dibuat: $PUBLIC_HTML -> $APP_DIR/public"
+    # Layout: project di folder terpisah, public_html dijadikan symlink ke public.
+    if [ -L "$PUBLIC_HTML" ]; then
+        echo "    Symlink sudah ada: $PUBLIC_HTML"
+    elif [ -e "$PUBLIC_HTML" ]; then
+        echo "    PERINGATAN: $PUBLIC_HTML sudah ada & bukan symlink. Dilewati demi keamanan." >&2
+        echo "    Hapus/rename manual jika ingin memakai symlink." >&2
+    else
+        ln -s "$APP_DIR/public" "$PUBLIC_HTML"
+        echo "    Dibuat: $PUBLIC_HTML -> $APP_DIR/public"
+    fi
 fi
 
 # --- 3. File .env ---------------------------------------------------------
