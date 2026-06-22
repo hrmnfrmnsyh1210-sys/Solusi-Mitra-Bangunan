@@ -54,6 +54,18 @@ class CheckoutController extends BaseController
             return redirect()->to(base_url('shop/cart'))->with('error', 'Keranjang belanja kosong.');
         }
 
+        // Tentukan metode bayar. Untuk QRIS, bukti pembayaran WAJIB diunggah
+        // lebih dulu sebelum pesanan diproses.
+        $metodeBayar = $this->request->getPost('metode_bayar') === 'qris' ? 'qris' : 'cod';
+        $buktiName   = null;
+        if ($metodeBayar === 'qris') {
+            [$buktiName, $errBukti] = $this->simpanBukti($this->request->getFile('bukti_bayar'));
+            if ($errBukti !== null) {
+                return redirect()->to(base_url('shop/checkout'))->withInput()
+                    ->with('error', $errBukti);
+            }
+        }
+
         $db = \Config\Database::connect();
         $db->transStart();
 
@@ -88,7 +100,6 @@ class CheckoutController extends BaseController
         $noHp        = $this->request->getPost('no_hp');
         $alamat      = $this->request->getPost('alamat');
         $catatan     = $this->request->getPost('catatan');
-        $metodeBayar = $this->request->getPost('metode_bayar') === 'qris' ? 'qris' : 'cod';
         $customerId  = session()->get('customer_id');
 
         if ($noHp || $alamat) {
@@ -110,6 +121,7 @@ class CheckoutController extends BaseController
             'kembalian'    => 0,
             'metode_bayar' => $metodeBayar,
             'status_bayar' => 'pending',
+            'bukti_bayar'  => $buktiName,
             'keterangan'   => $catatan ?: null,
         ]);
 
@@ -126,7 +138,7 @@ class CheckoutController extends BaseController
         session()->remove('cart');
 
         $pesan = $metodeBayar === 'qris'
-            ? 'Pesanan dibuat! Silakan bayar via QRIS lalu unggah bukti pembayaran untuk divalidasi admin.'
+            ? 'Pesanan & bukti pembayaran terkirim! Menunggu validasi admin.'
             : 'Pesanan dibuat! Pesanan COD akan diproses dan dibayar saat barang diterima.';
 
         return redirect()->to(base_url('shop/checkout/success/' . $idPenjualan))
@@ -149,38 +161,52 @@ class CheckoutController extends BaseController
             return redirect()->back()->with('error', 'Pesanan ini tidak menunggu pembayaran.');
         }
 
-        $file = $this->request->getFile('bukti_bayar');
+        [$newName, $err] = $this->simpanBukti($this->request->getFile('bukti_bayar'), $penjualan['bukti_bayar'] ?? null);
+        if ($err !== null) {
+            return redirect()->back()->with('error', $err);
+        }
+
+        $penjualanModel->skipValidation(true)->update($id, ['bukti_bayar' => $newName]);
+
+        return redirect()->to(base_url('shop/checkout/success/' . $id))
+            ->with('success', 'Bukti pembayaran terkirim. Menunggu validasi admin.');
+    }
+
+    /**
+     * Validasi & simpan file bukti pembayaran ke public/uploads/bukti/.
+     *
+     * @param mixed       $file    Objek UploadedFile dari request.
+     * @param string|null $oldName Nama bukti lama untuk dihapus (saat unggah ulang).
+     * @return array{0: ?string, 1: ?string} [namaFileBaru|null, pesanError|null]
+     */
+    private function simpanBukti($file, ?string $oldName = null): array
+    {
         if (!$file || !$file->isValid() || $file->getError() === UPLOAD_ERR_NO_FILE) {
-            return redirect()->back()->with('error', 'Silakan pilih file bukti pembayaran terlebih dahulu.');
+            return [null, 'Silakan unggah bukti pembayaran (JPG/PNG/WEBP) terlebih dahulu.'];
         }
 
         $allowedMime = ['image/jpeg', 'image/png', 'image/webp'];
         $allowedExt  = ['jpg', 'jpeg', 'png', 'webp'];
         if (!in_array($file->getMimeType(), $allowedMime, true) ||
             !in_array(strtolower($file->getExtension()), $allowedExt, true)) {
-            return redirect()->back()->with('error', 'Format bukti harus JPG, PNG, atau WEBP.');
+            return [null, 'Format bukti harus JPG, PNG, atau WEBP.'];
         }
         if ($file->getSize() > 2 * 1024 * 1024) {
-            return redirect()->back()->with('error', 'Ukuran bukti maksimal 2 MB.');
+            return [null, 'Ukuran bukti maksimal 2 MB.'];
         }
 
         $targetDir = FCPATH . 'uploads/bukti';
         if (!is_dir($targetDir)) {
             @mkdir($targetDir, 0775, true);
         }
-
-        // Hapus bukti lama jika ada (upload ulang)
-        if (!empty($penjualan['bukti_bayar'])) {
-            @unlink($targetDir . '/' . $penjualan['bukti_bayar']);
+        if (!empty($oldName)) {
+            @unlink($targetDir . '/' . $oldName);
         }
 
         $newName = $file->getRandomName();
         $file->move($targetDir, $newName);
 
-        $penjualanModel->skipValidation(true)->update($id, ['bukti_bayar' => $newName]);
-
-        return redirect()->to(base_url('shop/checkout/success/' . $id))
-            ->with('success', 'Bukti pembayaran terkirim. Menunggu validasi admin.');
+        return [$newName, null];
     }
 
     public function success($id)

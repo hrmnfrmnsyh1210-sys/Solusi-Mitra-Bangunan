@@ -28,7 +28,7 @@
     </div>
 </div>
 
-<form action="<?= base_url('shop/checkout/store') ?>" method="POST">
+<form action="<?= base_url('shop/checkout/store') ?>" method="POST" enctype="multipart/form-data">
 <?= csrf_field() ?>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -130,8 +130,22 @@
                                  class="w-56 h-56 object-contain">
                         </div>
                         <p class="text-xs text-slate-500 mt-3">
-                            Setelah pembayaran berhasil, klik <strong>Konfirmasi Pesanan</strong>.
+                            Setelah membayar, <strong>unggah bukti pembayaran</strong> di bawah ini,
+                            lalu klik <strong>Konfirmasi Pesanan</strong>.
                         </p>
+                    </div>
+
+                    <!-- Wajib unggah bukti untuk QRIS -->
+                    <div class="mt-4 pt-4 border-t border-indigo-100">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1.5">
+                            Bukti Pembayaran <span class="text-rose-500">*</span>
+                            <span class="text-slate-400 font-normal">(JPG/PNG/WEBP, maks 2 MB)</span>
+                        </label>
+                        <input type="file" id="bukti-input" name="bukti_bayar"
+                               accept="image/jpeg,image/png,image/webp"
+                               class="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-600 hover:file:bg-brand-100 cursor-pointer">
+                        <img id="bukti-preview" src="" alt="Pratinjau bukti"
+                             class="hidden mt-3 max-h-40 rounded-xl border border-slate-200">
                     </div>
                 </div>
             </div>
@@ -141,8 +155,13 @@
             (function () {
                 const options = document.querySelectorAll('.payment-option');
                 const preview = document.getElementById('qris-preview');
+                const buktiInput = document.getElementById('bukti-input');
 
                 function selectMethod(method) {
+                    // Bukti pembayaran wajib hanya untuk QRIS. Atribut required
+                    // dilepas saat COD agar input yang tersembunyi tidak memblok submit.
+                    if (buktiInput) buktiInput.required = (method === 'qris');
+
                     options.forEach(opt => {
                         const isActive = opt.dataset.method === method;
                         const radio = opt.querySelector('.payment-radio');
@@ -166,6 +185,20 @@
                 options.forEach(opt => {
                     opt.addEventListener('click', () => selectMethod(opt.dataset.method));
                 });
+
+                // Pratinjau gambar bukti yang dipilih
+                if (buktiInput) {
+                    const buktiPreview = document.getElementById('bukti-preview');
+                    buktiInput.addEventListener('change', () => {
+                        const file = buktiInput.files[0];
+                        if (file) {
+                            buktiPreview.src = URL.createObjectURL(file);
+                            buktiPreview.classList.remove('hidden');
+                        } else {
+                            buktiPreview.classList.add('hidden');
+                        }
+                    });
+                }
             })();
         </script>
     </div>
