@@ -63,6 +63,7 @@ class DashboardController extends BaseController
             FROM penjualan p
             LEFT JOIN detail_penjualan dp ON dp.id_penjualan = p.id
             WHERE p.tanggal_jual >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+              AND p.status_bayar = 'lunas'
             GROUP BY DATE(p.tanggal_jual)
             ORDER BY tgl ASC
         ", [$days - 1])->getResultArray();
@@ -89,6 +90,7 @@ class DashboardController extends BaseController
             LEFT JOIN detail_penjualan dp ON dp.id_barang = b.id
             LEFT JOIN penjualan p ON p.id = dp.id_penjualan
                 AND p.tanggal_jual >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+                AND p.status_bayar = 'lunas'
             GROUP BY k.id, k.nama_kategori
             ORDER BY total DESC
             LIMIT 6
@@ -107,6 +109,7 @@ class DashboardController extends BaseController
             FROM penjualan p
             LEFT JOIN detail_penjualan dp ON dp.id_penjualan = p.id
             WHERE p.tanggal_jual >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+              AND p.status_bayar = 'lunas'
             GROUP BY DATE_FORMAT(p.tanggal_jual, '%Y-%m')
             ORDER BY bln ASC
         ")->getResultArray();

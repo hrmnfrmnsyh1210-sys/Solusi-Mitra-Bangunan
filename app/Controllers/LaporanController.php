@@ -286,6 +286,7 @@ class LaporanController extends BaseController
             FROM penjualan p
             LEFT JOIN detail_penjualan dp ON dp.id_penjualan = p.id
             WHERE p.tanggal_jual >= ? AND p.tanggal_jual <= ?
+              AND p.status_bayar = 'lunas'
             GROUP BY p.id
             ORDER BY p.tanggal_jual ASC
         ", [$dari, $sampai])->getResultArray();

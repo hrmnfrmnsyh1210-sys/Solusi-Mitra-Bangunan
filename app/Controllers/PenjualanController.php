@@ -23,6 +23,7 @@ class PenjualanController extends BaseController
         $search  = $this->request->getGet('search');
         $dari    = $this->request->getGet('dari');
         $sampai  = $this->request->getGet('sampai');
+        $status  = $this->request->getGet('status');
 
         $builder = $this->model->select('
                     penjualan.*,
@@ -41,19 +42,24 @@ class PenjualanController extends BaseController
         }
         if ($dari)   $builder->where('penjualan.tanggal_jual >=', $dari);
         if ($sampai) $builder->where('penjualan.tanggal_jual <=', $sampai);
+        if (in_array($status, ['pending', 'lunas', 'batal'], true)) {
+            $builder->where('penjualan.status_bayar', $status);
+        }
 
         $total      = $builder->countAllResults(false);
         $penjualans = $builder->paginate($perPage, 'default');
         $pager      = $this->model->pager;
 
         return view('penjualan/index', [
-            'title'      => 'Transaksi Penjualan',
-            'penjualans' => $penjualans,
-            'pager'      => $pager,
-            'total'      => $total,
-            'search'     => $search,
-            'dari'       => $dari,
-            'sampai'     => $sampai,
+            'title'         => 'Transaksi Penjualan',
+            'penjualans'    => $penjualans,
+            'pager'         => $pager,
+            'total'         => $total,
+            'search'        => $search,
+            'dari'          => $dari,
+            'sampai'        => $sampai,
+            'status'        => $status,
+            'pending_count' => (new PenjualanModel())->where('status_bayar', 'pending')->countAllResults(),
         ]);
     }
 
@@ -98,6 +104,9 @@ class PenjualanController extends BaseController
             'bayar'         => $bayar,
             'kembalian'     => $bayar - $totalHarga,
             'keterangan'    => $this->request->getPost('keterangan'),
+            // Transaksi kasir/POS langsung lunas (dibayar tunai di tempat).
+            'status_bayar'  => 'lunas',
+            'tanggal_bayar' => date('Y-m-d H:i:s'),
         ];
 
         $this->model->skipValidation(true)->insert($header);
@@ -159,19 +168,93 @@ class PenjualanController extends BaseController
         $penjualan = $this->model->find($id);
         if (!$penjualan) return redirect()->to('penjualan')->with('error', 'Data tidak ditemukan.');
 
-        // Kembalikan stok via query builder langsung
-        $details = $this->detailModel->where('id_penjualan', $id)->findAll();
-        $db      = \Config\Database::connect();
-        foreach ($details as $d) {
-            $db->table('barang')
-               ->where('id', (int) $d['id_barang'])
-               ->set('stok', 'stok + ' . (int)$d['jumlah'], false)
-               ->update();
+        // Kembalikan stok hanya jika transaksi belum dibatalkan
+        // (transaksi 'batal' stoknya sudah dikembalikan saat pembatalan).
+        if (($penjualan['status_bayar'] ?? '') !== 'batal') {
+            $this->kembalikanStok($id);
+        }
+
+        // Hapus bukti bayar bila ada
+        if (!empty($penjualan['bukti_bayar'])) {
+            @unlink(FCPATH . 'uploads/bukti/' . $penjualan['bukti_bayar']);
         }
 
         $this->detailModel->where('id_penjualan', $id)->delete();
         $this->model->delete($id);
 
         return redirect()->to('penjualan')->with('success', 'Transaksi berhasil dihapus.');
+    }
+
+    /**
+     * Validasi pembayaran: tandai transaksi sebagai LUNAS.
+     */
+    public function validasi($id)
+    {
+        $penjualan = $this->model->find($id);
+        if (!$penjualan) return redirect()->to('penjualan')->with('error', 'Data tidak ditemukan.');
+
+        if ($penjualan['status_bayar'] === 'lunas') {
+            return redirect()->back()->with('error', 'Transaksi sudah lunas.');
+        }
+        if ($penjualan['status_bayar'] === 'batal') {
+            return redirect()->back()->with('error', 'Transaksi sudah dibatalkan, tidak bisa divalidasi.');
+        }
+
+        $this->model->skipValidation(true)->update($id, [
+            'status_bayar'  => 'lunas',
+            'bayar'         => $penjualan['total_harga'],
+            'kembalian'     => 0,
+            'tanggal_bayar' => date('Y-m-d H:i:s'),
+        ]);
+
+        return redirect()->back()->with('success', 'Pembayaran divalidasi. Transaksi ditandai LUNAS.');
+    }
+
+    /**
+     * Batalkan/tolak pesanan: tandai BATAL dan kembalikan stok.
+     */
+    public function batal($id)
+    {
+        $penjualan = $this->model->find($id);
+        if (!$penjualan) return redirect()->to('penjualan')->with('error', 'Data tidak ditemukan.');
+
+        if ($penjualan['status_bayar'] === 'batal') {
+            return redirect()->back()->with('error', 'Transaksi sudah dibatalkan.');
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        // Kembalikan stok yang sempat dikurangi saat pesanan dibuat
+        $this->kembalikanStok($id);
+
+        $this->model->skipValidation(true)->update($id, [
+            'status_bayar' => 'batal',
+            'bayar'        => 0,
+            'kembalian'    => 0,
+        ]);
+
+        $db->transComplete();
+
+        if (!$db->transStatus()) {
+            return redirect()->back()->with('error', 'Gagal membatalkan transaksi.');
+        }
+
+        return redirect()->back()->with('success', 'Transaksi dibatalkan & stok dikembalikan.');
+    }
+
+    /**
+     * Kembalikan stok barang dari sebuah transaksi penjualan.
+     */
+    private function kembalikanStok($idPenjualan): void
+    {
+        $db      = \Config\Database::connect();
+        $details = $this->detailModel->where('id_penjualan', $idPenjualan)->findAll();
+        foreach ($details as $d) {
+            $db->table('barang')
+               ->where('id', (int) $d['id_barang'])
+               ->set('stok', 'stok + ' . (int) $d['jumlah'], false)
+               ->update();
+        }
     }
 }

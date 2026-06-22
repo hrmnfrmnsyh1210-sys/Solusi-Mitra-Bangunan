@@ -78,6 +78,8 @@ class DetailPenjualanModel extends Model
                     SUM((detail_penjualan.harga_jual - detail_penjualan.harga_beli) * detail_penjualan.jumlah) as total_keuntungan
                 ')
                     ->join('barang', 'barang.id = detail_penjualan.id_barang')
+                    ->join('penjualan', 'penjualan.id = detail_penjualan.id_penjualan')
+                    ->where('penjualan.status_bayar', 'lunas')
                     ->groupBy('detail_penjualan.id_barang')
                     ->orderBy('total_terjual', 'DESC')
                     ->limit($limit)

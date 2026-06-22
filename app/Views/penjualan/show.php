@@ -41,9 +41,91 @@
             </div>
             <div>
                 <p class="text-xs text-slate-400 mb-1">Status</p>
-                <span class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full">Lunas</span>
+                <?php $badge = \App\Models\PenjualanModel::statusBadge($penjualan['status_bayar'] ?? 'lunas'); ?>
+                <span class="<?= $badge['class'] ?> text-xs font-semibold px-2.5 py-1 rounded-full"><?= $badge['label'] ?></span>
             </div>
         </div>
+
+        <!-- Pembayaran & Catatan Pelanggan -->
+        <?php
+            $metode = $penjualan['metode_bayar'] ?? 'cod';
+            $isPending = ($penjualan['status_bayar'] ?? '') === 'pending';
+        ?>
+        <div class="px-6 py-5 grid grid-cols-1 sm:grid-cols-3 gap-4 border-b border-slate-100">
+            <div>
+                <p class="text-xs text-slate-400 mb-1">Metode Pembayaran</p>
+                <p class="text-sm font-medium text-slate-700">
+                    <?php if ($metode === 'qris'): ?>
+                        <i class="fas fa-qrcode text-indigo-500 mr-1"></i> QRIS
+                    <?php else: ?>
+                        <i class="fas fa-money-bill-wave text-emerald-500 mr-1"></i> COD (Bayar di Tempat)
+                    <?php endif; ?>
+                </p>
+            </div>
+            <div class="sm:col-span-2">
+                <p class="text-xs text-slate-400 mb-1">Catatan Pelanggan</p>
+                <?php if (!empty($penjualan['keterangan'])): ?>
+                <p class="text-sm text-slate-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                    <i class="fas fa-sticky-note text-amber-400 mr-1"></i> <?= esc($penjualan['keterangan']) ?>
+                </p>
+                <?php else: ?>
+                <p class="text-sm text-slate-400 italic">— tidak ada catatan —</p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Bukti pembayaran (QRIS) + aksi validasi -->
+        <?php if ($metode === 'qris' || $isPending): ?>
+        <div class="px-6 py-5 border-b border-slate-100">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-5">
+                <div class="flex-shrink-0">
+                    <p class="text-xs text-slate-400 mb-2">Bukti Pembayaran</p>
+                    <?php if (!empty($penjualan['bukti_bayar'])): ?>
+                    <a href="<?= base_url('uploads/bukti/' . $penjualan['bukti_bayar']) ?>" target="_blank">
+                        <img src="<?= base_url('uploads/bukti/' . $penjualan['bukti_bayar']) ?>" alt="Bukti bayar"
+                             class="w-40 h-40 object-cover rounded-xl border border-slate-200 hover:opacity-90 transition">
+                    </a>
+                    <p class="text-[11px] text-slate-400 mt-1">Klik untuk perbesar</p>
+                    <?php else: ?>
+                    <div class="w-40 h-40 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-center text-slate-300 text-xs px-2">
+                        <?= $metode === 'qris' ? 'Pelanggan belum mengunggah bukti' : 'Tidak ada (COD)' ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($isPending): ?>
+                <div class="flex-1">
+                    <div class="bg-slate-50 rounded-xl p-4">
+                        <p class="text-sm font-semibold text-slate-700 mb-1">Validasi Pembayaran</p>
+                        <p class="text-xs text-slate-500 mb-3">
+                            <?= $metode === 'qris'
+                                ? 'Periksa bukti transfer di samping. Jika nominal & tujuan sesuai, tandai Lunas.'
+                                : 'Untuk COD, tandai Lunas setelah barang diterima & dibayar pelanggan.' ?>
+                        </p>
+                        <div class="flex items-center gap-2">
+                            <form action="<?= base_url('penjualan/validasi/' . $penjualan['id']) ?>" method="post"
+                                  onsubmit="return confirm('Tandai transaksi ini sebagai LUNAS?')">
+                                <?= csrf_field() ?>
+                                <button type="submit"
+                                        class="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold flex items-center gap-2 transition">
+                                    <i class="fas fa-check-circle"></i> Validasi & Tandai Lunas
+                                </button>
+                            </form>
+                            <form action="<?= base_url('penjualan/batal/' . $penjualan['id']) ?>" method="post"
+                                  onsubmit="return confirm('Batalkan transaksi ini? Stok akan dikembalikan.')">
+                                <?= csrf_field() ?>
+                                <button type="submit"
+                                        class="px-4 py-2 rounded-lg bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 text-sm font-semibold flex items-center gap-2 transition">
+                                    <i class="fas fa-times-circle"></i> Tolak / Batalkan
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Detail Barang -->
         <div class="overflow-x-auto">

@@ -26,15 +26,30 @@
             <span class="text-slate-400 text-xs">s/d</span>
             <input type="date" name="sampai" value="<?= esc($sampai ?? '') ?>" class="inp py-2 text-[13px] w-36" title="Sampai tanggal">
         </div>
+        <select name="status" class="inp py-2 text-[13px] w-44" title="Status pembayaran">
+            <option value="">Semua Status</option>
+            <option value="pending" <?= ($status ?? '') === 'pending' ? 'selected' : '' ?>>Menunggu Pembayaran</option>
+            <option value="lunas"   <?= ($status ?? '') === 'lunas'   ? 'selected' : '' ?>>Lunas</option>
+            <option value="batal"   <?= ($status ?? '') === 'batal'   ? 'selected' : '' ?>>Dibatalkan</option>
+        </select>
         <button type="submit" class="btn-primary py-2 px-4">
             <i class="fas fa-filter text-xs"></i> Filter
         </button>
-        <?php if ($search || $dari || $sampai): ?>
+        <?php if ($search || $dari || $sampai || $status): ?>
         <a href="<?= base_url('penjualan') ?>" class="text-xs text-slate-500 hover:text-slate-700 px-3 py-2 rounded-lg border border-slate-200 hover:bg-white transition">
             <i class="fas fa-times mr-1"></i> Reset
         </a>
         <?php endif; ?>
     </form>
+
+    <?php if (!empty($pending_count)): ?>
+    <a href="<?= base_url('penjualan?status=pending') ?>"
+       class="flex items-center gap-2 mx-6 mt-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm hover:bg-amber-100 transition">
+        <i class="fas fa-bell"></i>
+        <span><strong><?= $pending_count ?></strong> pesanan menunggu validasi pembayaran.</span>
+        <span class="ml-auto text-xs font-semibold">Lihat &rarr;</span>
+    </a>
+    <?php endif; ?>
 
     <div class="overflow-x-auto">
         <table class="tbl w-full">
@@ -46,12 +61,13 @@
                     <th class="text-center">Item</th>
                     <th class="text-right">Total</th>
                     <th class="text-right">Keuntungan</th>
+                    <th class="text-center">Status</th>
                     <th class="text-center">Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($penjualans)): ?>
-                <tr><td colspan="7" class="py-16 text-center">
+                <tr><td colspan="8" class="py-16 text-center">
                     <i class="fas fa-cash-register text-4xl text-slate-200 block mb-3"></i>
                     <p class="text-slate-400 text-sm">
                         <?= ($search || $dari || $sampai) ? 'Tidak ada transaksi yang cocok' : 'Belum ada transaksi penjualan' ?>
@@ -75,7 +91,21 @@
                         <span class="font-semibold text-emerald-600">Rp <?= number_format($p['total_keuntungan'], 0, ',', '.') ?></span>
                     </td>
                     <td class="text-center">
+                        <?php $badge = \App\Models\PenjualanModel::statusBadge($p['status_bayar'] ?? 'lunas'); ?>
+                        <span class="badge <?= $badge['class'] ?> whitespace-nowrap"><?= $badge['label'] ?></span>
+                    </td>
+                    <td class="text-center">
                         <div class="flex items-center justify-center gap-1.5">
+                            <?php if (($p['status_bayar'] ?? '') === 'pending'): ?>
+                            <form action="<?= base_url('penjualan/validasi/' . $p['id']) ?>" method="post" class="inline"
+                                  onsubmit="return confirm('Validasi pembayaran transaksi ini sebagai LUNAS?')">
+                                <?= csrf_field() ?>
+                                <button type="submit"
+                                   class="w-7 h-7 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition" title="Validasi Lunas">
+                                    <i class="fas fa-check text-xs"></i>
+                                </button>
+                            </form>
+                            <?php endif; ?>
                             <a href="<?= base_url('penjualan/show/' . $p['id']) ?>"
                                class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition" title="Detail">
                                 <i class="fas fa-eye text-xs"></i>

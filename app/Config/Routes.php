@@ -54,6 +54,8 @@ $routes->get('penjualan/create',        'PenjualanController::create');
 $routes->post('penjualan/store',        'PenjualanController::store');
 $routes->get('penjualan/show/(:num)',    'PenjualanController::show/$1');
 $routes->get('penjualan/invoice/(:num)','PenjualanController::invoice/$1');
+$routes->post('penjualan/validasi/(:num)', 'PenjualanController::validasi/$1');
+$routes->post('penjualan/batal/(:num)',    'PenjualanController::batal/$1');
 $routes->get('penjualan/delete/(:num)', 'PenjualanController::delete/$1');
 
 // Laporan
@@ -107,4 +109,5 @@ $routes->get('shop/cart',                        'Customer\CartController::index
 $routes->get('shop/checkout',                    'Customer\CheckoutController::index',        ['filter' => 'customer_auth']);
 $routes->post('shop/checkout/store',             'Customer\CheckoutController::store',        ['filter' => 'customer_auth']);
 $routes->get('shop/checkout/success/(:num)',     'Customer\CheckoutController::success/$1',   ['filter' => 'customer_auth']);
+$routes->post('shop/checkout/bukti/(:num)',       'Customer\CheckoutController::uploadBukti/$1', ['filter' => 'customer_auth']);
 $routes->get('shop/orders',                      'Customer\CheckoutController::orders',       ['filter' => 'customer_auth']);

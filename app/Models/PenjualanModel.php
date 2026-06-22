@@ -15,7 +15,20 @@ class PenjualanModel extends Model
     protected $allowedFields    = [
         'no_transaksi', 'tanggal_jual', 'nama_pembeli', 'id_customer',
         'total_harga', 'bayar', 'kembalian', 'metode_bayar', 'keterangan',
+        'status_bayar', 'bukti_bayar', 'tanggal_bayar',
     ];
+
+    /**
+     * Label & warna badge untuk status pembayaran (dipakai di view).
+     */
+    public static function statusBadge(?string $status): array
+    {
+        return match ($status) {
+            'lunas'   => ['label' => 'Lunas',                 'class' => 'bg-emerald-100 text-emerald-700'],
+            'batal'   => ['label' => 'Dibatalkan',            'class' => 'bg-rose-100 text-rose-600'],
+            default   => ['label' => 'Menunggu Pembayaran',   'class' => 'bg-amber-100 text-amber-700'],
+        };
+    }
 
     // Dates
     protected $useTimestamps = true;
@@ -64,7 +77,7 @@ class PenjualanModel extends Model
                 COALESCE(SUM((dp.harga_jual - dp.harga_beli) * dp.jumlah), 0)                            AS total_keuntungan
             FROM penjualan p
             LEFT JOIN detail_penjualan dp ON dp.id_penjualan = p.id
-            WHERE p.tanggal_jual = ?
+            WHERE p.tanggal_jual = ? AND p.status_bayar = 'lunas'
         ", [$tanggal])->getRowArray();
     }
 
@@ -77,6 +90,7 @@ class PenjualanModel extends Model
         return $this->select('DATE(tanggal_jual) as tanggal, SUM(total_harga) as total, COUNT(id) as jumlah_transaksi')
                     ->where('MONTH(tanggal_jual)', $bulan)
                     ->where('YEAR(tanggal_jual)', $tahun)
+                    ->where('status_bayar', 'lunas')
                     ->groupBy('DATE(tanggal_jual)')
                     ->orderBy('tanggal_jual', 'ASC')
                     ->findAll();

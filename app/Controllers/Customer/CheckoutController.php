@@ -98,15 +98,18 @@ class CheckoutController extends BaseController
             ]));
         }
 
+        // Pesanan dari toko online belum lunas: menunggu validasi pembayaran
+        // oleh admin (QRIS: cek bukti transfer, COD: setelah barang diterima).
         $penjualanModel->skipValidation(true)->insert([
             'no_transaksi' => $penjualanModel->generateNoTransaksi(),
             'tanggal_jual' => date('Y-m-d'),
             'nama_pembeli' => session()->get('customer_nama'),
             'id_customer'  => $customerId,
             'total_harga'  => $totalHarga,
-            'bayar'        => $totalHarga,
+            'bayar'        => 0,
             'kembalian'    => 0,
             'metode_bayar' => $metodeBayar,
+            'status_bayar' => 'pending',
             'keterangan'   => $catatan ?: null,
         ]);
 
@@ -122,8 +125,62 @@ class CheckoutController extends BaseController
 
         session()->remove('cart');
 
+        $pesan = $metodeBayar === 'qris'
+            ? 'Pesanan dibuat! Silakan bayar via QRIS lalu unggah bukti pembayaran untuk divalidasi admin.'
+            : 'Pesanan dibuat! Pesanan COD akan diproses dan dibayar saat barang diterima.';
+
         return redirect()->to(base_url('shop/checkout/success/' . $idPenjualan))
-            ->with('success', 'Pesanan berhasil dibuat!');
+            ->with('success', $pesan);
+    }
+
+    /**
+     * Customer mengunggah bukti pembayaran (QRIS) untuk pesanannya.
+     */
+    public function uploadBukti($id)
+    {
+        $penjualanModel = new PenjualanModel();
+        $penjualan      = $penjualanModel->find($id);
+
+        if (!$penjualan || (int) $penjualan['id_customer'] !== (int) session()->get('customer_id')) {
+            return redirect()->to(base_url('shop/orders'))->with('error', 'Pesanan tidak ditemukan.');
+        }
+
+        if ($penjualan['status_bayar'] !== 'pending') {
+            return redirect()->back()->with('error', 'Pesanan ini tidak menunggu pembayaran.');
+        }
+
+        $file = $this->request->getFile('bukti_bayar');
+        if (!$file || !$file->isValid() || $file->getError() === UPLOAD_ERR_NO_FILE) {
+            return redirect()->back()->with('error', 'Silakan pilih file bukti pembayaran terlebih dahulu.');
+        }
+
+        $allowedMime = ['image/jpeg', 'image/png', 'image/webp'];
+        $allowedExt  = ['jpg', 'jpeg', 'png', 'webp'];
+        if (!in_array($file->getMimeType(), $allowedMime, true) ||
+            !in_array(strtolower($file->getExtension()), $allowedExt, true)) {
+            return redirect()->back()->with('error', 'Format bukti harus JPG, PNG, atau WEBP.');
+        }
+        if ($file->getSize() > 2 * 1024 * 1024) {
+            return redirect()->back()->with('error', 'Ukuran bukti maksimal 2 MB.');
+        }
+
+        $targetDir = FCPATH . 'uploads/bukti';
+        if (!is_dir($targetDir)) {
+            @mkdir($targetDir, 0775, true);
+        }
+
+        // Hapus bukti lama jika ada (upload ulang)
+        if (!empty($penjualan['bukti_bayar'])) {
+            @unlink($targetDir . '/' . $penjualan['bukti_bayar']);
+        }
+
+        $newName = $file->getRandomName();
+        $file->move($targetDir, $newName);
+
+        $penjualanModel->skipValidation(true)->update($id, ['bukti_bayar' => $newName]);
+
+        return redirect()->to(base_url('shop/checkout/success/' . $id))
+            ->with('success', 'Bukti pembayaran terkirim. Menunggu validasi admin.');
     }
 
     public function success($id)

@@ -32,8 +32,9 @@
         <!-- Header -->
         <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
             <div>
-                <span class="inline-block px-2.5 py-0.5 bg-green-100 text-green-700 text-[11px] font-semibold rounded-full mb-1">
-                    Selesai
+                <?php $badge = \App\Models\PenjualanModel::statusBadge($order['status_bayar'] ?? 'pending'); ?>
+                <span class="inline-block px-2.5 py-0.5 <?= $badge['class'] ?> text-[11px] font-semibold rounded-full mb-1">
+                    <?= $badge['label'] ?>
                 </span>
                 <p class="font-bold text-slate-800 font-mono"><?= esc($order['no_transaksi']) ?></p>
             </div>
@@ -70,9 +71,15 @@
                 <?php endif; ?>
             </div>
 
+            <?php $perluBayar = ($order['status_bayar'] ?? 'pending') === 'pending' && $isQris; ?>
             <a href="<?= base_url('shop/checkout/success/' . $order['id']) ?>"
-               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-brand-600 bg-brand-50 hover:bg-brand-100 transition">
-                <i class="fas fa-eye text-[10px]"></i> Lihat Detail
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition
+                      <?= $perluBayar ? 'text-white bg-brand-600 hover:bg-brand-700' : 'text-brand-600 bg-brand-50 hover:bg-brand-100' ?>">
+                <?php if ($perluBayar): ?>
+                    <i class="fas fa-upload text-[10px]"></i> Bayar / Upload Bukti
+                <?php else: ?>
+                    <i class="fas fa-eye text-[10px]"></i> Lihat Detail
+                <?php endif; ?>
             </a>
         </div>
     </div>
